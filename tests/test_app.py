@@ -32,18 +32,22 @@ class GameApiTests(unittest.TestCase):
         self.assertIn(state["question"], [item["question"] for item in QUESTION_BANK["hard"]])
         self.assertIsNone(state["answer"])
 
-    def test_winning_stage_unlocks_the_next_one(self):
+    def test_stage_unlocks_after_five_answered_questions(self):
         self.post_json("/api/start", {"name": "Mali"})
         self.post_json("/api/select-stage", {"stage": 1})
-        game = self.post_json("/api/start-level", {"difficulty": "easy"}).get_json()
-        game_data = next(iter(GAMES.values()))["game"]
+        self.post_json("/api/start-level", {"difficulty": "easy"})
 
-        result = self.post_json("/api/guess", {"choice": game_data["correct_choice"]}).get_json()
-
-        self.assertEqual(result["status"], "won")
-        self.assertEqual(result["unlocked_stage"], 2)
-        self.assertEqual(result["completed_stages"], [1])
-        self.assertEqual(game["screen"], "playing")
+        for question_number in range(1, 6):
+            game_data = next(iter(GAMES.values()))["game"]
+            result = self.post_json(
+                "/api/guess", {"choice": game_data["correct_choice"]}
+            ).get_json()
+            self.assertEqual(result["stage_questions_answered"], question_number)
+            self.assertEqual(result["stage_finished"], question_number == 5)
+            self.assertEqual(result["unlocked_stage"], 2 if question_number == 5 else 1)
+            if question_number < 5:
+                next_state = self.post_json("/api/next-question", {}).get_json()
+                self.assertEqual(next_state["stage_question_number"], question_number + 1)
 
     def test_locked_stage_is_rejected(self):
         self.post_json("/api/start", {"name": "Mali"})
@@ -61,6 +65,25 @@ class GameApiTests(unittest.TestCase):
 
         self.assertEqual(state["screen"], "playing")
         self.assertEqual(state["difficulty"], "medium")
+
+    def test_wrong_answer_counts_and_allows_the_next_question(self):
+        self.post_json("/api/start", {"name": "Mali"})
+        self.post_json("/api/select-stage", {"stage": 1})
+        self.post_json("/api/start-level", {"difficulty": "easy"})
+        game = next(iter(GAMES.values()))["game"]
+        wrong_choice = next(
+            choice["letter"]
+            for choice in game["choices"]
+            if choice["letter"] != game["correct_choice"]
+        )
+
+        result = self.post_json("/api/guess", {"choice": wrong_choice}).get_json()
+        next_question = self.post_json("/api/next-question", {}).get_json()
+
+        self.assertEqual(result["stage_questions_answered"], 1)
+        self.assertFalse(result["stage_finished"])
+        self.assertEqual(result["unlocked_stage"], 1)
+        self.assertEqual(next_question["stage_question_number"], 2)
 
     def test_name_is_not_stored_in_the_session_cookie(self):
         response = self.post_json("/api/start", {"name": "Private Name"})

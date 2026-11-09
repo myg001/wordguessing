@@ -8,6 +8,7 @@ from game import (
     TOTAL_STAGES,
     apply_choice,
     create_player,
+    next_stage_question,
     public_player_state,
     reveal_hint,
     select_stage,
@@ -108,6 +109,18 @@ def retry_stage():
     return jsonify(public_player_state(player))
 
 
+@app.post("/api/next-question")
+def next_question():
+    player = _get_game()
+    if player is None:
+        return jsonify({"error": "เริ่มเกมและใส่ชื่อก่อนนะ"}), 400
+    try:
+        next_stage_question(player)
+    except ValueError as error:
+        return jsonify({"error": str(error)}), 400
+    return jsonify(public_player_state(player))
+
+
 @app.post("/api/guess")
 def guess():
     player = _get_game()
@@ -116,15 +129,22 @@ def guess():
 
     payload = request.get_json(silent=True) or {}
     game = player["game"]
+    was_playing = game["status"] == "playing"
     result = apply_choice(game, payload.get("choice", ""))
+    if was_playing and game["status"] != "playing":
+        stage_key = str(player["stage"])
+        progress = player["stage_progress"].get(stage_key, 0) + 1
+        player["stage_progress"][stage_key] = progress
+        game["stage_questions_answered"] = progress
+        game["stage_finished"] = progress >= game["questions_per_stage"]
+        if game["stage_finished"]:
+            if player["stage"] not in player["completed_stages"]:
+                player["completed_stages"].append(player["stage"])
+            player["unlocked_stage"] = min(
+                TOTAL_STAGES,
+                max(player["unlocked_stage"], player["stage"] + 1),
+            )
     player["score"] = game["score"]
-    if game["status"] == "won":
-        if player["stage"] not in player["completed_stages"]:
-            player["completed_stages"].append(player["stage"])
-        player["unlocked_stage"] = min(
-            TOTAL_STAGES,
-            max(player["unlocked_stage"], player["stage"] + 1),
-        )
     return jsonify(public_player_state(player))
 
 

@@ -9,7 +9,11 @@ with QUESTION_DATA_PATH.open(encoding="utf-8") as question_file:
     QUESTION_DATA = json.load(question_file)["difficulties"]
 
 DIFFICULTIES = {
-    key: {"label": data["label"], "description": data["description"]}
+    key: {
+        "label": data["label"],
+        "description": data["description"],
+        "points": data["points"],
+    }
     for key, data in QUESTION_DATA.items()
 }
 QUESTION_BANK = {
@@ -18,7 +22,7 @@ QUESTION_BANK = {
 QUESTIONS = tuple(question for bank in QUESTION_BANK.values() for question in bank)
 
 
-def create_game(score=0, question=None, difficulty="easy"):
+def create_game(score=0, question=None, difficulty="easy", question_number=1):
     selected = question or random.choice(QUESTIONS)
     question_difficulty = difficulty if difficulty in QUESTION_BANK else "easy"
     distractors = [
@@ -47,6 +51,11 @@ def create_game(score=0, question=None, difficulty="easy"):
         "question": selected["question"],
         "clue": selected.get("clue", ""),
         "difficulty": difficulty,
+        "points_per_question": DIFFICULTIES[difficulty]["points"],
+        "stage_question_number": question_number,
+        "questions_per_stage": 5,
+        "stage_questions_answered": question_number - 1,
+        "stage_finished": False,
         "hints": list(selected["hints"]),
         "revealed_hints": 0,
         "score": score,
@@ -65,6 +74,7 @@ def create_player(name):
         "stage": None,
         "difficulty": None,
         "stage_difficulties": {},
+        "stage_progress": {},
         "round": 0,
         "seen_questions": {difficulty: [] for difficulty in DIFFICULTIES},
         "game": None,
@@ -80,6 +90,9 @@ def select_stage(player, stage_number):
     player["game"] = None
     previous_difficulty = player["stage_difficulties"].get(str(stage_number))
     if previous_difficulty:
+        stage_key = str(stage_number)
+        if player["stage_progress"].get(stage_key, 0) >= 5:
+            player["stage_progress"][stage_key] = 0
         player["screen"] = "difficulty"
         start_stage_game(player, previous_difficulty)
     else:
@@ -92,7 +105,16 @@ def start_stage_game(player, difficulty):
         raise ValueError("เลือกด่านก่อนเริ่มเล่นนะ")
     if difficulty not in DIFFICULTIES:
         raise ValueError("เลือกระดับความยากที่มีให้เลือกนะ")
+    stage_key = str(player["stage"])
+    selected_difficulty = player["stage_difficulties"].get(stage_key)
+    if selected_difficulty and selected_difficulty != difficulty:
+        raise ValueError("ด่านนี้เลือกระดับความยากไปแล้ว")
+    player["stage_difficulties"][stage_key] = difficulty
 
+    _create_stage_question(player, difficulty)
+
+
+def _create_stage_question(player, difficulty):
     seen = player["seen_questions"][difficulty]
     available = [question for question in QUESTION_BANK[difficulty] if question["id"] not in seen]
     if not available:
@@ -102,10 +124,21 @@ def start_stage_game(player, difficulty):
     seen.append(question["id"])
 
     player["difficulty"] = difficulty
-    player["stage_difficulties"][str(player["stage"])] = difficulty
     player["round"] += 1
-    player["game"] = create_game(player["score"], question, difficulty)
+    question_number = player["stage_progress"].get(str(player["stage"]), 0) + 1
+    player["game"] = create_game(player["score"], question, difficulty, question_number)
     player["screen"] = "playing"
+
+
+def next_stage_question(player):
+    game = player.get("game")
+    if player["screen"] != "playing" or game is None:
+        raise ValueError("ไม่มีคำถามที่กำลังเล่นอยู่")
+    if game["status"] == "playing":
+        raise ValueError("ตอบคำถามปัจจุบันก่อนนะ")
+    if game["stage_finished"]:
+        raise ValueError("ด่านนี้ตอบครบแล้ว ไปด่านถัดไปกันเลย")
+    _create_stage_question(player, player["difficulty"])
 
 
 def public_player_state(player):
@@ -131,6 +164,7 @@ def public_player_state(player):
         "difficulty_counts": {difficulty: len(bank) for difficulty, bank in QUESTION_BANK.items()},
         "selected_stage": player["stage"],
         "difficulty": player["difficulty"],
+        "stage_progress": player["stage_progress"].get(str(player["stage"]), 0),
         "difficulties": DIFFICULTIES,
         "round": player["round"],
     }
@@ -149,8 +183,11 @@ def apply_choice(game, choice):
     game["selected_choice"] = value
     if value == game["correct_choice"]:
         game["status"] = "won"
-        game["score"] += 20
-        game["message"] = f"ถูกต้อง! คำตอบคือ {game['answer'].upper()} +20 คะแนน"
+        game["score"] += game["points_per_question"]
+        game["message"] = (
+            f"ถูกต้อง! คำตอบคือ {game['answer'].upper()} "
+            f"+{game['points_per_question']} คะแนน"
+        )
     else:
         game["status"] = "lost"
         game["message"] = f"คำตอบที่ถูกคือ {game['answer'].upper()}"
@@ -176,6 +213,11 @@ def public_state(game, round_number, result=None):
         "question": game["question"],
         "clue": game.get("clue", ""),
         "difficulty": game.get("difficulty", "easy"),
+        "points_per_question": game["points_per_question"],
+        "stage_question_number": game["stage_question_number"],
+        "questions_per_stage": game["questions_per_stage"],
+        "stage_questions_answered": game["stage_questions_answered"],
+        "stage_finished": game["stage_finished"],
         "choices": game["choices"],
         "selected_choice": game["selected_choice"],
         "correct_choice": game["correct_choice"] if show_answer else None,

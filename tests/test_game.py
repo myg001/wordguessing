@@ -8,6 +8,7 @@ from game import (
     apply_choice,
     create_game,
     create_player,
+    next_stage_question,
     public_player_state,
     public_state,
     reveal_hint,
@@ -42,8 +43,15 @@ class GameLogicTests(unittest.TestCase):
 
         state = public_state(self.game, 1)
         self.assertEqual(state["status"], "won")
-        self.assertEqual(state["score"], 20)
+        self.assertEqual(state["score"], 10)
         self.assertEqual(state["answer"], "BYTE")
+
+    def test_points_per_correct_answer_depend_on_difficulty(self):
+        for difficulty, expected_points in (("easy", 10), ("medium", 20), ("hard", 30)):
+            game = create_game(question=QUESTION, difficulty=difficulty)
+            apply_choice(game, game["correct_choice"])
+
+            self.assertEqual(game["score"], expected_points)
 
     def test_wrong_choice_ends_round_without_points(self):
         wrong_choice = next(
@@ -103,6 +111,22 @@ class ProgressionTests(unittest.TestCase):
 
         self.assertEqual(player["screen"], "playing")
         self.assertEqual(player["difficulty"], "medium")
+
+    def test_questions_show_progress_from_one_to_five(self):
+        player = create_player("Byte")
+        select_stage(player, 1)
+        start_stage_game(player, "easy")
+
+        for question_number in range(1, 6):
+            self.assertEqual(player["game"]["stage_question_number"], question_number)
+            apply_choice(player["game"], player["game"]["correct_choice"])
+            player["stage_progress"]["1"] = question_number
+            player["game"]["stage_questions_answered"] = question_number
+            player["game"]["stage_finished"] = question_number == 5
+            if question_number < 5:
+                next_stage_question(player)
+
+        self.assertTrue(player["game"]["stage_finished"])
 
     def test_questions_do_not_repeat_until_difficulty_bank_is_exhausted(self):
         player = create_player("Byte")

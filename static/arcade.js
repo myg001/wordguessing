@@ -26,6 +26,7 @@ function makeNewPlayer(name = '') {
         stage: null,
         difficulty: null,
         stage_difficulties: {},
+        stage_progress: {},
         round: 0,
         seen_questions: Object.fromEntries(difficultyOrder.map((key) => [key, []])),
         game: null,
@@ -53,6 +54,7 @@ function buildViewState() {
         difficulties: Object.fromEntries(difficultyOrder.map((key) => [key, {
             label: questionBanks[key].label,
             description: questionBanks[key].description,
+            points: questionBanks[key].points,
         }])),
         difficulty_counts: Object.fromEntries(difficultyOrder.map((key) => [key, questionBanks[key].questions.length])),
         round: player.round,
@@ -101,6 +103,11 @@ function createRound(difficulty) {
         choices,
         correct_choice: choices[options.findIndex((option) => option.id === question.id)].letter,
         selected_choice: null,
+        points_per_question: questionBanks[difficulty].points,
+        stage_question_number: (player.stage_progress[String(player.stage)] || 0) + 1,
+        questions_per_stage: bank.length,
+        stage_questions_answered: player.stage_progress[String(player.stage)] || 0,
+        stage_finished: false,
         hints: [],
         all_hints: question.hints,
         revealed_hints: 0,
@@ -112,6 +119,8 @@ function createRound(difficulty) {
 
 function beginLevel(difficulty) {
     if (!player.stage || !questionBanks[difficulty]) throw new Error('เลือกระดับความยากก่อนเริ่มเล่นนะ');
+    const previousDifficulty = player.stage_difficulties[player.stage];
+    if (previousDifficulty && previousDifficulty !== difficulty) throw new Error('ด่านนี้เลือกระดับความยากไปแล้ว');
     player.difficulty = difficulty;
     player.stage_difficulties[player.stage] = difficulty;
     player.round += 1;
@@ -129,6 +138,7 @@ function requestJson(url, payload = {}) {
             player.stage = payload.stage;
             player.game = null;
             if (player.stage_difficulties[payload.stage]) {
+                if ((player.stage_progress[payload.stage] || 0) >= 5) player.stage_progress[payload.stage] = 0;
                 beginLevel(player.stage_difficulties[payload.stage]);
             } else {
                 player.difficulty = null;
@@ -145,6 +155,12 @@ function requestJson(url, payload = {}) {
         case '/api/retry-stage':
             if (player.difficulty) beginLevel(player.difficulty);
             break;
+        case '/api/next-question':
+            if (!player.game || player.game.status === 'playing' || player.game.stage_finished) break;
+            player.round += 1;
+            player.game = createRound(player.difficulty);
+            player.screen = 'playing';
+            break;
         case '/api/guess': {
             const game = player.game;
             if (!game || game.status !== 'playing') break;
@@ -152,13 +168,20 @@ function requestJson(url, payload = {}) {
             game.selected_choice = payload.choice;
             if (payload.choice === game.correct_choice) {
                 game.status = 'won';
-                game.message = `ถูกต้อง! คำตอบคือ ${game.answer.toUpperCase()} +20 คะแนน`;
-                player.score += 20;
-                if (!player.completed_stages.includes(player.stage)) player.completed_stages.push(player.stage);
-                player.unlocked_stage = Math.min(10, Math.max(player.unlocked_stage, player.stage + 1));
+                game.message = `ถูกต้อง! คำตอบคือ ${game.answer.toUpperCase()} +${game.points_per_question} คะแนน`;
+                player.score += game.points_per_question;
             } else {
                 game.status = 'lost';
                 game.message = `คำตอบที่ถูกคือ ${game.answer.toUpperCase()}`;
+            }
+            const stageKey = String(player.stage);
+            const progress = (player.stage_progress[stageKey] || 0) + 1;
+            player.stage_progress[stageKey] = progress;
+            game.stage_questions_answered = progress;
+            game.stage_finished = progress >= game.questions_per_stage;
+            if (game.stage_finished) {
+                if (!player.completed_stages.includes(player.stage)) player.completed_stages.push(player.stage);
+                player.unlocked_stage = Math.min(10, Math.max(player.unlocked_stage, player.stage + 1));
             }
             break;
         }
@@ -187,6 +210,14 @@ async function loadState() {
         const saved = JSON.parse(localStorage.getItem('byte-buddy-pages-v1'));
         player = saved && saved.seen_questions && saved.game !== undefined ? saved : makeNewPlayer();
         player.stage_difficulties ||= {};
+        player.stage_progress ||= {};
+        if (player.game && player.difficulty) {
+            player.game.points_per_question ||= questionBanks[player.difficulty].points;
+            player.game.stage_question_number ||= (player.stage_progress[String(player.stage)] || 0) + 1;
+            player.game.questions_per_stage = questionBanks[player.difficulty].questions.length;
+            player.game.stage_questions_answered ??= player.stage_progress[String(player.stage)] || 0;
+            player.game.stage_finished ??= player.game.stage_questions_answered >= player.game.questions_per_stage;
+        }
     } catch {
         player = makeNewPlayer();
     }
@@ -215,8 +246,8 @@ function render(state) {
     if (state.screen === 'difficulty') renderDifficulties(state);
     if (state.screen === 'playing') {
         renderGame(state);
-        if (previousStatus === 'playing' && state.status === 'won') showToast('ผ่านด่านแล้ว! เก่งมาก');
-        if (previousStatus === 'playing' && state.status === 'lost') showToast('หมดโอกาสแล้ว ลองใหม่ได้นะ');
+        if (previousStatus === 'playing' && state.status === 'won') showToast('ตอบถูก!');
+        if (previousStatus === 'playing' && state.status === 'lost') showToast('เฉลยแสดงแล้ว ไปข้อต่อไปได้');
     }
     showScreen(state.screen);
     savePlayer();
@@ -251,7 +282,7 @@ function renderDifficulties(state) {
         button.type = 'button';
         button.className = 'difficulty-card';
         button.dataset.difficulty = key;
-        button.innerHTML = `<span class="difficulty-icon">${icons[key]}</span><span class="difficulty-level">${labels[key]}</span><h2>${info.label}</h2><p>${info.description}</p><span class="difficulty-count">${state.difficulty_counts[key]} คำถาม</span><span class="difficulty-arrow" aria-hidden="true">↗</span>`;
+        button.innerHTML = `<span class="difficulty-icon">${icons[key]}</span><span class="difficulty-level">${labels[key]}</span><h2>${info.label}</h2><p>${info.description}</p><span class="difficulty-count">${state.difficulty_counts[key]} ข้อ · +${info.points} คะแนน/ข้อ</span><span class="difficulty-arrow" aria-hidden="true">↗</span>`;
         button.addEventListener('click', () => startLevel(key));
         return button;
     }));
@@ -293,7 +324,8 @@ function renderGame(state) {
     document.querySelector('#score').textContent = state.score;
     document.querySelector('#play-stage').textContent = `STAGE ${String(state.selected_stage).padStart(2, '0')} · ${state.difficulties[state.difficulty].label}`;
     document.querySelector('#category').textContent = state.category;
-    document.querySelector('#question-number').textContent = `QUESTION ${String(state.round).padStart(2, '0')}`;
+    document.querySelector('#question-number').textContent = `ข้อ ${state.stage_question_number} / ${state.questions_per_stage}`;
+    document.querySelector('#points-per-question').textContent = `+${state.points_per_question} คะแนน/ข้อ`;
     document.querySelector('#question').textContent = state.question;
     document.querySelector('#clue-text').textContent = state.clue;
     document.querySelector('#extra-hints').replaceChildren(...state.hints.map((hint) => {
@@ -313,17 +345,18 @@ function renderGame(state) {
         : `<span aria-hidden="true">＋</span> ขอคำใบ้เพิ่ม <span class="hint-cost">−5 pts · ${state.hints_remaining} เหลือ</span>`;
     const result = document.querySelector('#round-result');
     const nextStage = document.querySelector('#next-stage-button');
-    const tryAgain = document.querySelector('#try-again-button');
     result.hidden = state.status === 'playing';
-    result.textContent = state.status === 'won'
-        ? state.selected_stage === state.total_stages ? 'พิชิตครบทุกด่านแล้ว! สุดยอดไปเลย' : `ปลดล็อกด่าน ${String(state.unlocked_stage).padStart(2, '0')} แล้ว!`
-        : state.status === 'lost' ? `คำตอบคือ ${state.answer}` : '';
+    result.textContent = state.status === 'playing' ? '' : state.stage_finished
+        ? state.selected_stage === state.total_stages ? 'ครบทั้ง 5 ข้อ · พิชิตครบทุกด่านแล้ว!' : `ครบทั้ง 5 ข้อ · ปลดล็อกด่าน ${String(state.unlocked_stage).padStart(2, '0')} แล้ว!`
+        : state.status === 'won' ? `ถูกต้อง · ยังเหลืออีก ${state.questions_per_stage - state.stage_questions_answered} ข้อ`
+        : `คำตอบคือ ${state.answer} · ยังเหลืออีก ${state.questions_per_stage - state.stage_questions_answered} ข้อ`;
     result.classList.toggle('is-lost', state.status === 'lost');
-    nextStage.hidden = state.status !== 'won';
-    nextStage.innerHTML = state.selected_stage === state.total_stages
-        ? 'กลับไปดูแผนที่ <span aria-hidden="true">→</span>'
-        : 'ไปด่านถัดไป <span aria-hidden="true">→</span>';
-    tryAgain.hidden = state.status !== 'lost';
+    nextStage.hidden = state.status === 'playing';
+    nextStage.innerHTML = state.stage_finished
+        ? state.selected_stage === state.total_stages
+            ? 'กลับไปดูแผนที่ <span aria-hidden="true">→</span>'
+            : 'ไปด่านถัดไป <span aria-hidden="true">→</span>'
+        : `ข้อถัดไป ${state.stage_questions_answered + 1} / ${state.questions_per_stage} <span aria-hidden="true">→</span>`;
 }
 
 async function submitChoice(choice) {
@@ -397,15 +430,15 @@ document.querySelector('#reset-player').addEventListener('click', () => {
 });
 
 document.querySelector('#next-stage-button').addEventListener('click', async () => {
+    if (!currentState.stage_finished) {
+        try { render(await requestJson('/api/next-question')); } catch (error) { showToast(error.message); }
+        return;
+    }
     if (currentState.selected_stage === currentState.total_stages) {
         try { render(await requestJson('/api/return-to-stages')); } catch (error) { showToast(error.message); }
         return;
     }
     await selectStage(currentState.selected_stage + 1);
-});
-
-document.querySelector('#try-again-button').addEventListener('click', async () => {
-    try { render(await requestJson('/api/retry-stage')); } catch (error) { showToast(error.message); }
 });
 
 hintButton.addEventListener('click', async () => {
