@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#18251f">
+    <meta name="description" content="ออกผจญภัยในโลกศัพท์คอมพิวเตอร์ ผ่านด่านและท้าความรู้ของคุณ">
+    <title>Byte Buddy | ภารกิจพิชิตศัพท์คอมพิวเตอร์</title>
+    <link rel="stylesheet" href="/static/arcade.css">
+    <script src="/static/arcade.js" defer></script>
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="/" aria-label="Byte Buddy หน้าหลัก">
+            <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+            <span>BYTE<span class="brand-light">BUDDY</span></span>
+        </a>
+        <div class="topbar-right">
+            <span id="top-player" class="top-player" hidden>สวัสดี <strong id="player-name"></strong></span>
+            <div id="score-box" class="score-chip" aria-label="คะแนนปัจจุบัน" hidden>
+                <span class="score-label">คะแนน</span><strong id="score">0</strong><span class="score-unit">PTS</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="page-shell">
+        <section id="welcome-screen" class="screen welcome-screen" aria-labelledby="welcome-title" hidden>
+            <div class="welcome-copy">
+                <p class="eyebrow"><span class="eyebrow-mark">01</span> COMPUTER VOCABULARY QUEST</p>
+                <h1 id="welcome-title">พร้อมอัปเลเวล<br>ความรู้<span>หรือยัง?</span></h1>
+                <p class="welcome-description">แกะคำใบ้ ทายศัพท์ไอทีให้ถูก<br>แล้วพิชิตด่านไปด้วยกัน</p>
+                <button id="open-name-dialog" class="primary-button start-button" type="button">
+                    เริ่มการผจญภัย <span aria-hidden="true">↗</span>
+                </button>
+                <p class="welcome-meta"><span class="status-pip"></span> 10 ด่าน <span>·</span> 3 ระดับความยาก</p>
+            </div>
+            <div class="hero-art" aria-hidden="true">
+                <div class="hero-orbit orbit-outer"></div>
+                <div class="hero-orbit orbit-inner"></div>
+                <div class="hero-sticker sticker-top">0101<br>1010</div>
+                <div class="hero-terminal">
+                    <div class="terminal-bar"><span></span><span></span><span></span><b>byte_buddy.exe</b></div>
+                    <div class="terminal-content">
+                        <span class="terminal-prompt">&gt;_</span>
+                        <span class="terminal-line">guess_the_word<span class="terminal-cursor">_</span></span>
+                        <div class="terminal-slots"><i>B</i><i>Y</i><i>T</i><i class="slot-hidden">?</i><i class="slot-hidden">?</i></div>
+                        <span class="terminal-response">SYSTEM READY <b>●</b></span>
+                    </div>
+                </div>
+                <div class="hero-sticker sticker-bottom">LEVEL<br><strong>UP!</strong></div>
+                <span class="hero-star star-one">✳</span><span class="hero-star star-two">✳</span>
+            </div>
+        </section>
+
+        <section id="stages-screen" class="screen stages-screen" aria-labelledby="stages-title" hidden>
+            <div class="screen-heading">
+                <div>
+                    <p class="eyebrow"><span class="eyebrow-mark">MAP</span> YOUR NEXT CHALLENGE</p>
+                    <h1 id="stages-title">เลือกด่าน <span id="stage-player-name"></span></h1>
+                </div>
+                <div class="stage-progress"><span id="completed-count">0</span><span class="progress-slash">/</span><span id="total-stage-count">10</span><small>ผ่านแล้ว</small></div>
+            </div>
+            <p class="screen-subtitle">ผ่านด่านปัจจุบันเพื่อปลดล็อกเส้นทางถัดไป</p>
+            <div id="stage-grid" class="stage-grid" aria-label="แผนที่ด่าน"></div>
+            <button id="reset-player" class="text-button reset-button" type="button">เปลี่ยนผู้เล่น</button>
+        </section>
+
+        <section id="difficulty-screen" class="screen difficulty-screen" aria-labelledby="difficulty-title" hidden>
+            <button id="back-to-stages" class="back-button" type="button"><span aria-hidden="true">←</span> กลับไปเลือกด่าน</button>
+            <div class="screen-heading difficulty-heading">
+                <div>
+                    <p class="eyebrow"><span class="eyebrow-mark">STAGE <span id="selected-stage-number">01</span></span> PICK YOUR MODE</p>
+                    <h1 id="difficulty-title">เลือกระดับ<span>ความยาก</span></h1>
+                </div>
+                <p class="screen-subtitle difficulty-note">ทุกระดับมีคลังคำถามของตัวเอง<br>คำศัพท์จะไม่ซ้ำจนกว่าจะเล่นครบ</p>
+            </div>
+            <div id="difficulty-grid" class="difficulty-grid"></div>
+        </section>
+
+        <section id="playing-screen" class="screen playing-screen" aria-label="เกมทายคำศัพท์" hidden>
+            <div class="play-heading">
+                <button id="back-to-difficulty" class="back-button" type="button"><span aria-hidden="true">←</span> เปลี่ยนความยาก</button>
+                <div class="play-badges"><span id="play-stage" class="play-stage"></span><span id="category" class="category-label"></span></div>
+            </div>
+            <div class="game-layout">
+                <div class="play-panel">
+                    <div class="question-block">
+                        <div class="question-meta"><p class="section-kicker">คำถาม <span class="question-mark">?</span></p><span id="question-number" class="question-number"></span></div>
+                        <h2 id="question">กำลังเตรียมคำถาม...</h2>
+                    </div>
+                    <div class="choice-section">
+                        <div class="choice-heading"><p class="section-kicker">เลือกคำตอบที่ถูกต้อง</p><span class="choice-count">SELECT ONE</span></div>
+                        <div id="answer-options" class="answer-options" role="group" aria-label="ตัวเลือกคำตอบ"></div>
+                        <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+                    </div>
+                </div>
+                <aside class="side-panel" aria-label="คำใบ้และสถานะเกม">
+                    <div class="clue-section">
+                        <div class="clue-title-row"><p class="section-kicker">คำใบ้</p><span class="clue-index">HINTS</span></div>
+                        <p id="clue-text" class="clue-text"></p>
+                        <div id="extra-hints" class="extra-hints"></div>
+                        <button id="hint-button" class="hint-button" type="button"><span aria-hidden="true">＋</span> ขอคำใบ้เพิ่ม <span class="hint-cost">−5 pts</span></button>
+                    </div>
+                    <div class="score-note"><span class="score-note-icon" aria-hidden="true">✳</span><p>ตอบถูก <strong>+20 คะแนน</strong><br>ตอบผิดแล้วลองใหม่ได้</p></div>
+                    <div id="round-result" class="round-result" hidden></div>
+                    <button id="next-stage-button" class="primary-button next-stage-button" type="button" hidden>ไปด่านถัดไป <span aria-hidden="true">→</span></button>
+                    <button id="try-again-button" class="secondary-button try-again-button" type="button" hidden>ลองด่านนี้อีกครั้ง</button>
+                </aside>
+            </div>
+        </section>
+
+        <footer class="page-footer"><span>BYTE BUDDY <span>·</span> LEARN THROUGH PLAY</span><span class="footer-code">B//B v1.0</span></footer>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <dialog id="name-dialog" class="name-dialog">
+        <form id="name-form" method="dialog">
+            <p class="eyebrow"><span class="eyebrow-mark">PLAYER 01</span> READY TO PLAY?</p>
+            <h2>ขอชื่อฮีโร่<br>หน่อยได้ไหม</h2>
+            <label for="name-input">ชื่อผู้เล่น</label>
+            <input id="name-input" name="name" type="text" maxlength="20" autocomplete="nickname" placeholder="เช่น Byte Hero" required>
+            <p id="name-error" class="name-error" aria-live="polite"></p>
+            <button class="primary-button dialog-start" type="submit">ไปเลือกด่าน <span aria-hidden="true">→</span></button>
+        </form>
+    </dialog>
+</body>
+</html>
