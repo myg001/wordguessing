@@ -13,22 +13,174 @@ const feedback = document.querySelector('#feedback');
 const hintButton = document.querySelector('#hint-button');
 let currentState = null;
 let toastTimeout = null;
+let questionBanks = null;
+let player = null;
 
-async function requestJson(url, payload = {}) {
-    const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'เชื่อมต่อไม่สำเร็จ ลองอีกครั้งนะ');
-    return data;
+function makeNewPlayer(name = '') {
+    return {
+        name,
+        screen: name ? 'stages' : 'welcome',
+        score: 0,
+        unlocked_stage: name ? 1 : 0,
+        completed_stages: [],
+        stage: null,
+        difficulty: null,
+        round: 0,
+        seen_questions: Object.fromEntries(difficultyOrder.map((key) => [key, []])),
+        game: null,
+    };
+}
+
+function savePlayer() {
+    try {
+        localStorage.setItem('byte-buddy-pages-v1', JSON.stringify(player));
+    } catch {
+        showToast('บันทึกความคืบหน้าไม่ได้ โปรดตรวจพื้นที่จัดเก็บของเบราว์เซอร์');
+    }
+}
+
+function buildViewState() {
+    const state = {
+        screen: player.screen,
+        player_name: player.name,
+        score: player.score,
+        unlocked_stage: player.unlocked_stage,
+        completed_stages: player.completed_stages,
+        total_stages: 10,
+        selected_stage: player.stage,
+        difficulty: player.difficulty,
+        difficulties: Object.fromEntries(difficultyOrder.map((key) => [key, {
+            label: questionBanks[key].label,
+            description: questionBanks[key].description,
+        }])),
+        difficulty_counts: Object.fromEntries(difficultyOrder.map((key) => [key, questionBanks[key].questions.length])),
+        round: player.round,
+    };
+    if (player.game) {
+        Object.assign(state, {
+            ...player.game,
+            score: player.score,
+            answer: player.game.status === 'playing' ? null : player.game.answer.toUpperCase(),
+            correct_choice: player.game.status === 'playing' ? null : player.game.correct_choice,
+        });
+    }
+    return state;
+}
+
+function createRound(difficulty) {
+    const bank = questionBanks[difficulty].questions;
+    const seen = player.seen_questions[difficulty];
+    let available = bank.filter((question) => !seen.includes(question.id));
+    if (available.length === 0) {
+        seen.length = 0;
+        available = [...bank];
+    }
+    const question = available[Math.floor(Math.random() * available.length)];
+    seen.push(question.id);
+    const distractors = bank.filter((item) => item.id !== question.id);
+    for (let index = distractors.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [distractors[index], distractors[swapIndex]] = [distractors[swapIndex], distractors[index]];
+    }
+    const options = [question, ...distractors.slice(0, 3)];
+    for (let index = options.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
+        [options[index], options[swapIndex]] = [options[swapIndex], options[index]];
+    }
+    const choices = options.map((option, index) => ({
+        letter: String.fromCharCode(65 + index),
+        text: option.answer,
+    }));
+    return {
+        question_id: question.id,
+        answer: question.answer,
+        category: question.category,
+        question: question.question,
+        clue: question.clue,
+        choices,
+        correct_choice: choices[options.findIndex((option) => option.id === question.id)].letter,
+        selected_choice: null,
+        hints: [],
+        all_hints: question.hints,
+        revealed_hints: 0,
+        hints_remaining: question.hints.length,
+        status: 'playing',
+        message: 'เลือกคำตอบที่ถูกต้องจากตัวเลือกด้านล่าง',
+    };
+}
+
+function requestJson(url, payload = {}) {
+    switch (url) {
+        case '/api/start':
+            player = makeNewPlayer(payload.name);
+            break;
+        case '/api/select-stage':
+            if (payload.stage > player.unlocked_stage) throw new Error('ผ่านด่านก่อนหน้าเพื่อปลดล็อกด่านนี้ก่อนนะ');
+            player.stage = payload.stage;
+            player.difficulty = null;
+            player.game = null;
+            player.screen = 'difficulty';
+            break;
+        case '/api/start-level':
+            if (!player.stage || !questionBanks[payload.difficulty]) throw new Error('เลือกระดับความยากก่อนเริ่มเล่นนะ');
+            player.difficulty = payload.difficulty;
+            player.round += 1;
+            player.game = createRound(payload.difficulty);
+            player.screen = 'playing';
+            break;
+        case '/api/return-to-stages':
+            player.screen = 'stages';
+            player.game = null;
+            break;
+        case '/api/retry-stage':
+            player.screen = 'difficulty';
+            player.game = null;
+            break;
+        case '/api/guess': {
+            const game = player.game;
+            if (!game || game.status !== 'playing') break;
+            if (!game.choices.some((choice) => choice.letter === payload.choice)) break;
+            game.selected_choice = payload.choice;
+            if (payload.choice === game.correct_choice) {
+                game.status = 'won';
+                game.message = `ถูกต้อง! คำตอบคือ ${game.answer.toUpperCase()} +20 คะแนน`;
+                player.score += 20;
+                if (!player.completed_stages.includes(player.stage)) player.completed_stages.push(player.stage);
+                player.unlocked_stage = Math.min(10, Math.max(player.unlocked_stage, player.stage + 1));
+            } else {
+                game.status = 'lost';
+                game.message = `คำตอบที่ถูกคือ ${game.answer.toUpperCase()}`;
+            }
+            break;
+        }
+        case '/api/hint': {
+            const game = player.game;
+            if (game && game.status === 'playing' && game.revealed_hints < game.all_hints.length) {
+                game.revealed_hints += 1;
+                game.hints = game.all_hints.slice(0, game.revealed_hints);
+                game.hints_remaining = game.all_hints.length - game.revealed_hints;
+                game.message = 'เปิดคำใบ้เพิ่มแล้ว หัก 5 คะแนน';
+                player.score = Math.max(0, player.score - 5);
+            }
+            break;
+        }
+        default:
+            throw new Error('ไม่รู้จักคำสั่งนี้');
+    }
+    return buildViewState();
 }
 
 async function loadState() {
-    const response = await fetch('/api/state');
-    if (!response.ok) throw new Error('โหลดข้อมูลเกมไม่สำเร็จ');
-    render(await response.json());
+    const response = await fetch(new URL('static/questions.json', document.baseURI));
+    if (!response.ok) throw new Error('โหลดคลังคำถามไม่สำเร็จ');
+    questionBanks = (await response.json()).difficulties;
+    try {
+        const saved = JSON.parse(localStorage.getItem('byte-buddy-pages-v1'));
+        player = saved && saved.seen_questions && saved.game !== undefined ? saved : makeNewPlayer();
+    } catch {
+        player = makeNewPlayer();
+    }
+    render(buildViewState());
 }
 
 function showScreen(name) {
@@ -57,6 +209,7 @@ function render(state) {
         if (previousStatus === 'playing' && state.status === 'lost') showToast('หมดโอกาสแล้ว ลองใหม่ได้นะ');
     }
     showScreen(state.screen);
+    savePlayer();
 }
 
 function renderStages(state) {

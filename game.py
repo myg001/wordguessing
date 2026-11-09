@@ -1,140 +1,19 @@
+import json
 import random
+from pathlib import Path
 
 
 TOTAL_STAGES = 10
-DIFFICULTIES = {
-    "easy": {"label": "เริ่มต้น", "description": "อุปกรณ์และคำศัพท์พื้นฐาน"},
-    "medium": {"label": "ท้าทาย", "description": "ระบบและแนวคิดคอมพิวเตอร์"},
-    "hard": {"label": "ผู้เชี่ยวชาญ", "description": "เครือข่าย ความปลอดภัย และโค้ด"},
-}
+QUESTION_DATA_PATH = Path(__file__).resolve().parent / "static" / "questions.json"
+with QUESTION_DATA_PATH.open(encoding="utf-8") as question_file:
+    QUESTION_DATA = json.load(question_file)["difficulties"]
 
+DIFFICULTIES = {
+    key: {"label": data["label"], "description": data["description"]}
+    for key, data in QUESTION_DATA.items()
+}
 QUESTION_BANK = {
-    "easy": (
-        {
-            "id": "keyboard",
-            "answer": "keyboard",
-            "category": "อุปกรณ์คอมพิวเตอร์",
-            "question": "อุปกรณ์ที่ใช้พิมพ์ตัวอักษรและคำสั่งเข้าสู่คอมพิวเตอร์คืออะไร?",
-            "clue": "อุปกรณ์รับข้อมูลที่มีปุ่มตัวอักษรให้กด",
-            "hints": ["มีปุ่มเรียงกันหลายแถว", "ชื่อขึ้นต้นด้วยตัว K"],
-        },
-        {
-            "id": "mouse",
-            "answer": "mouse",
-            "category": "อุปกรณ์คอมพิวเตอร์",
-            "question": "อุปกรณ์ที่ใช้เลื่อนเคอร์เซอร์และคลิกเลือกสิ่งต่าง ๆ บนหน้าจอคืออะไร?",
-            "clue": "อุปกรณ์ชี้ตำแหน่งที่มักมีปุ่มคลิกสองข้าง",
-            "hints": ["บางรุ่นมีล้อเลื่อนตรงกลาง", "ชื่อเหมือนสัตว์ตัวเล็กที่ชอบชีส"],
-        },
-        {
-            "id": "monitor",
-            "answer": "monitor",
-            "category": "อุปกรณ์คอมพิวเตอร์",
-            "question": "อุปกรณ์แสดงภาพ ข้อความ และผลลัพธ์จากคอมพิวเตอร์เรียกว่าอะไร?",
-            "clue": "หน้าจอที่ใช้ดูสิ่งต่าง ๆ จากเครื่องคอมพิวเตอร์",
-            "hints": ["แสดงผลเป็นภาพและข้อความ", "ชื่อขึ้นต้นด้วยตัว M"],
-        },
-        {
-            "id": "printer",
-            "answer": "printer",
-            "category": "อุปกรณ์คอมพิวเตอร์",
-            "question": "อุปกรณ์ที่นำข้อความหรือภาพจากคอมพิวเตอร์ออกมาเป็นกระดาษคืออะไร?",
-            "clue": "เปลี่ยนไฟล์ดิจิทัลให้กลายเป็นเอกสารบนกระดาษ",
-            "hints": ["มักใช้หมึกหรือผงหมึก", "ชื่อขึ้นต้นด้วยตัว P"],
-        },
-        {
-            "id": "folder",
-            "answer": "folder",
-            "category": "ไฟล์และข้อมูล",
-            "question": "พื้นที่ที่ใช้จัดเก็บและจัดกลุ่มไฟล์ไว้ด้วยกันบนคอมพิวเตอร์เรียกว่าอะไร?",
-            "clue": "ใช้แยกไฟล์เป็นหมวดหมู่ให้ค้นหาได้ง่าย",
-            "hints": ["สร้างซ้อนกันเป็นชั้น ๆ ได้", "ชื่อเหมือนแฟ้มเอกสาร"],
-        },
-    ),
-    "medium": (
-        {
-            "id": "processor",
-            "answer": "processor",
-            "category": "ฮาร์ดแวร์",
-            "question": "ชิ้นส่วนใดทำหน้าที่ประมวลผลคำสั่งและข้อมูลของคอมพิวเตอร์?",
-            "clue": "ชิปหลักที่ทำงานกับคำสั่งและข้อมูล",
-            "hints": ["ติดตั้งอยู่บนเมนบอร์ด", "ชื่อย่อที่คุ้นกันคือ CPU"],
-        },
-        {
-            "id": "browser",
-            "answer": "browser",
-            "category": "ซอฟต์แวร์",
-            "question": "โปรแกรมที่ใช้เปิดเว็บไซต์และท่องอินเทอร์เน็ตเรียกว่าอะไร?",
-            "clue": "โปรแกรมสำหรับเปิดดูเว็บเพจ",
-            "hints": ["Chrome และ Firefox เป็นตัวอย่าง", "ชื่อขึ้นต้นด้วยตัว B"],
-        },
-        {
-            "id": "database",
-            "answer": "database",
-            "category": "ข้อมูล",
-            "question": "ระบบที่ใช้จัดเก็บและจัดระเบียบข้อมูลเพื่อให้ค้นหาได้สะดวกคืออะไร?",
-            "clue": "คลังข้อมูลที่จัดระเบียบและค้นหาได้",
-            "hints": ["เว็บไซต์ใช้เก็บข้อมูลผู้ใช้", "ชื่อประกอบด้วยคำว่า data และ base"],
-        },
-        {
-            "id": "firewall",
-            "answer": "firewall",
-            "category": "ความปลอดภัย",
-            "question": "ระบบใดช่วยกรองข้อมูลเครือข่ายเพื่อป้องกันการเชื่อมต่อที่ไม่ต้องการ?",
-            "clue": "ด่านควบคุมข้อมูลเข้าออกเครือข่าย",
-            "hints": ["ชื่อแปลตรงตัวได้ว่ากำแพงไฟ", "ทำงานตามกฎที่กำหนดไว้"],
-        },
-        {
-            "id": "motherboard",
-            "answer": "motherboard",
-            "category": "ฮาร์ดแวร์",
-            "question": "แผงวงจรหลักที่เชื่อมต่อ CPU หน่วยความจำ และอุปกรณ์ต่าง ๆ คืออะไร?",
-            "clue": "แผงวงจรหลักที่เชื่อมอุปกรณ์ภายในเข้าด้วยกัน",
-            "hints": ["ชิ้นส่วนอื่น ๆ มักติดตั้งหรือเชื่อมต่ออยู่กับสิ่งนี้", "ชื่อขึ้นต้นด้วยคำว่า mother"],
-        },
-    ),
-    "hard": (
-        {
-            "id": "algorithm",
-            "answer": "algorithm",
-            "category": "การเขียนโปรแกรม",
-            "question": "ชุดขั้นตอนที่เรียงลำดับเพื่อแก้ปัญหาหรือทำงานให้สำเร็จเรียกว่าอะไร?",
-            "clue": "ขั้นตอนแก้ปัญหาที่เรียงลำดับไว้อย่างชัดเจน",
-            "hints": ["ไม่จำเป็นต้องเขียนเป็นโค้ดเสมอไป", "ชื่อขึ้นต้นด้วยตัว A"],
-        },
-        {
-            "id": "encryption",
-            "answer": "encryption",
-            "category": "ความปลอดภัย",
-            "question": "การแปลงข้อมูลให้อ่านไม่ออกหากไม่มีรหัสหรือกุญแจที่ถูกต้องคืออะไร?",
-            "clue": "การเข้ารหัสก่อนส่งหรือจัดเก็บข้อมูล",
-            "hints": ["ช่วยปกป้องข้อมูลที่ส่งผ่านอินเทอร์เน็ต", "ชื่อขึ้นต้นด้วยตัว E"],
-        },
-        {
-            "id": "bandwidth",
-            "answer": "bandwidth",
-            "category": "เครือข่าย",
-            "question": "ค่าที่บอกความจุสูงสุดของการรับส่งข้อมูลบนเครือข่ายคืออะไร?",
-            "clue": "ค่านี้บอกปริมาณข้อมูลที่ส่งผ่านเครือข่ายได้",
-            "hints": ["มักวัดเป็นบิตต่อวินาที", "ชื่อขึ้นต้นด้วยคำว่า band"],
-        },
-        {
-            "id": "virtualization",
-            "answer": "virtualization",
-            "category": "ระบบคอมพิวเตอร์",
-            "question": "เทคนิคที่จำลองเครื่องหรือทรัพยากรคอมพิวเตอร์ให้ทำงานแยกจากฮาร์ดแวร์จริงเรียกว่าอะไร?",
-            "clue": "ทำให้เครื่องจริงหนึ่งเครื่องจำลองเป็นหลายสภาพแวดล้อมได้",
-            "hints": ["เครื่องเสมือนเป็นตัวอย่างของเทคนิคนี้", "ชื่อขึ้นต้นด้วย virtual"],
-        },
-        {
-            "id": "authentication",
-            "answer": "authentication",
-            "category": "ความปลอดภัย",
-            "question": "กระบวนการตรวจสอบว่าผู้ใช้เป็นบุคคลตามที่กล่าวอ้างเรียกว่าอะไร?",
-            "clue": "ขั้นตอนยืนยันตัวตนก่อนอนุญาตให้เข้าใช้งาน",
-            "hints": ["รหัสผ่านและลายนิ้วมือใช้ในกระบวนการนี้ได้", "ชื่อขึ้นต้นด้วยคำว่า auth"],
-        },
-    ),
+    key: tuple(data["questions"]) for key, data in QUESTION_DATA.items()
 }
 QUESTIONS = tuple(question for bank in QUESTION_BANK.values() for question in bank)
 
@@ -232,9 +111,7 @@ def public_player_state(player):
             "completed_stages": [],
             "total_stages": TOTAL_STAGES,
             "difficulties": DIFFICULTIES,
-            "difficulty_counts": {
-                difficulty: len(bank) for difficulty, bank in QUESTION_BANK.items()
-            },
+            "difficulty_counts": {difficulty: len(bank) for difficulty, bank in QUESTION_BANK.items()},
         }
 
     state = {
@@ -244,9 +121,7 @@ def public_player_state(player):
         "unlocked_stage": player["unlocked_stage"],
         "completed_stages": player["completed_stages"],
         "total_stages": TOTAL_STAGES,
-        "difficulty_counts": {
-            difficulty: len(bank) for difficulty, bank in QUESTION_BANK.items()
-        },
+        "difficulty_counts": {difficulty: len(bank) for difficulty, bank in QUESTION_BANK.items()},
         "selected_stage": player["stage"],
         "difficulty": player["difficulty"],
         "difficulties": DIFFICULTIES,
@@ -261,7 +136,7 @@ def apply_choice(game, choice):
     value = str(choice).strip().upper()
     if game["status"] != "playing":
         return {"message": "คำถามนี้ตอบไปแล้ว ไปด่านถัดไปกันเลย"}
-    if value not in {choice["letter"] for choice in game["choices"]}:
+    if value not in {option["letter"] for option in game["choices"]}:
         return {"message": "เลือกคำตอบ A, B, C หรือ D ก่อนนะ"}
 
     game["selected_choice"] = value
