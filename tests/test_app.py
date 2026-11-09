@@ -52,6 +52,16 @@ class GameApiTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 400)
 
+    def test_retry_reuses_the_current_stage_difficulty(self):
+        self.post_json("/api/start", {"name": "Mali"})
+        self.post_json("/api/select-stage", {"stage": 1})
+        self.post_json("/api/start-level", {"difficulty": "medium"})
+
+        state = self.post_json("/api/retry-stage", {}).get_json()
+
+        self.assertEqual(state["screen"], "playing")
+        self.assertEqual(state["difficulty"], "medium")
+
     def test_name_is_not_stored_in_the_session_cookie(self):
         response = self.post_json("/api/start", {"name": "Private Name"})
 

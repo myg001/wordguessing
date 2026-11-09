@@ -99,8 +99,12 @@ def retry_stage():
     player = _get_game()
     if player is None or player["stage"] is None:
         return jsonify({"error": "เลือกด่านก่อนเริ่มเล่นนะ"}), 400
+    difficulty = player["difficulty"]
+    if difficulty is None:
+        return jsonify({"error": "เลือกระดับความยากก่อนเริ่มเล่นนะ"}), 400
     player["screen"] = "difficulty"
     player["game"] = None
+    start_stage_game(player, difficulty)
     return jsonify(public_player_state(player))
 
 

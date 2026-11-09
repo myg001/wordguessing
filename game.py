@@ -64,6 +64,7 @@ def create_player(name):
         "completed_stages": [],
         "stage": None,
         "difficulty": None,
+        "stage_difficulties": {},
         "round": 0,
         "seen_questions": {difficulty: [] for difficulty in DIFFICULTIES},
         "game": None,
@@ -76,9 +77,14 @@ def select_stage(player, stage_number):
     if stage_number > player["unlocked_stage"]:
         raise ValueError("ผ่านด่านก่อนหน้าเพื่อปลดล็อกด่านนี้ก่อนนะ")
     player["stage"] = stage_number
-    player["difficulty"] = None
     player["game"] = None
-    player["screen"] = "difficulty"
+    previous_difficulty = player["stage_difficulties"].get(str(stage_number))
+    if previous_difficulty:
+        player["screen"] = "difficulty"
+        start_stage_game(player, previous_difficulty)
+    else:
+        player["difficulty"] = None
+        player["screen"] = "difficulty"
 
 
 def start_stage_game(player, difficulty):
@@ -96,6 +102,7 @@ def start_stage_game(player, difficulty):
     seen.append(question["id"])
 
     player["difficulty"] = difficulty
+    player["stage_difficulties"][str(player["stage"])] = difficulty
     player["round"] += 1
     player["game"] = create_game(player["score"], question, difficulty)
     player["screen"] = "playing"

@@ -25,6 +25,7 @@ function makeNewPlayer(name = '') {
         completed_stages: [],
         stage: null,
         difficulty: null,
+        stage_difficulties: {},
         round: 0,
         seen_questions: Object.fromEntries(difficultyOrder.map((key) => [key, []])),
         game: null,
@@ -109,6 +110,15 @@ function createRound(difficulty) {
     };
 }
 
+function beginLevel(difficulty) {
+    if (!player.stage || !questionBanks[difficulty]) throw new Error('เลือกระดับความยากก่อนเริ่มเล่นนะ');
+    player.difficulty = difficulty;
+    player.stage_difficulties[player.stage] = difficulty;
+    player.round += 1;
+    player.game = createRound(difficulty);
+    player.screen = 'playing';
+}
+
 function requestJson(url, payload = {}) {
     switch (url) {
         case '/api/start':
@@ -117,24 +127,23 @@ function requestJson(url, payload = {}) {
         case '/api/select-stage':
             if (payload.stage > player.unlocked_stage) throw new Error('ผ่านด่านก่อนหน้าเพื่อปลดล็อกด่านนี้ก่อนนะ');
             player.stage = payload.stage;
-            player.difficulty = null;
             player.game = null;
-            player.screen = 'difficulty';
+            if (player.stage_difficulties[payload.stage]) {
+                beginLevel(player.stage_difficulties[payload.stage]);
+            } else {
+                player.difficulty = null;
+                player.screen = 'difficulty';
+            }
             break;
         case '/api/start-level':
-            if (!player.stage || !questionBanks[payload.difficulty]) throw new Error('เลือกระดับความยากก่อนเริ่มเล่นนะ');
-            player.difficulty = payload.difficulty;
-            player.round += 1;
-            player.game = createRound(payload.difficulty);
-            player.screen = 'playing';
+            beginLevel(payload.difficulty);
             break;
         case '/api/return-to-stages':
             player.screen = 'stages';
             player.game = null;
             break;
         case '/api/retry-stage':
-            player.screen = 'difficulty';
-            player.game = null;
+            if (player.difficulty) beginLevel(player.difficulty);
             break;
         case '/api/guess': {
             const game = player.game;
@@ -177,6 +186,7 @@ async function loadState() {
     try {
         const saved = JSON.parse(localStorage.getItem('byte-buddy-pages-v1'));
         player = saved && saved.seen_questions && saved.game !== undefined ? saved : makeNewPlayer();
+        player.stage_difficulties ||= {};
     } catch {
         player = makeNewPlayer();
     }
@@ -377,7 +387,7 @@ document.querySelector('#back-to-stages').addEventListener('click', async () => 
 });
 
 document.querySelector('#back-to-difficulty').addEventListener('click', async () => {
-    try { render(await requestJson('/api/retry-stage')); } catch (error) { showToast(error.message); }
+    try { render(await requestJson('/api/return-to-stages')); } catch (error) { showToast(error.message); }
 });
 
 document.querySelector('#reset-player').addEventListener('click', () => {

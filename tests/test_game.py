@@ -92,13 +92,29 @@ class ProgressionTests(unittest.TestCase):
         self.assertEqual(public_player_state(player)["screen"], "difficulty")
         self.assertEqual(public_player_state(player)["selected_stage"], 1)
 
+    def test_selected_difficulty_is_reused_when_reopening_stage(self):
+        player = create_player("Byte")
+        select_stage(player, 1)
+        start_stage_game(player, "medium")
+        player["screen"] = "stages"
+        player["game"] = None
+
+        select_stage(player, 1)
+
+        self.assertEqual(player["screen"], "playing")
+        self.assertEqual(player["difficulty"], "medium")
+
     def test_questions_do_not_repeat_until_difficulty_bank_is_exhausted(self):
         player = create_player("Byte")
         answers = []
 
         with patch("game.random.choice", side_effect=lambda options: options[0]):
             for _ in QUESTION_BANK["easy"]:
-                select_stage(player, 1)
+                if player["stage"] is None:
+                    select_stage(player, 1)
+                else:
+                    player["screen"] = "difficulty"
+                    player["game"] = None
                 start_stage_game(player, "easy")
                 answers.append(player["game"]["answer"])
 
